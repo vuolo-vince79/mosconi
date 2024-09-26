@@ -1,5 +1,7 @@
 const canvas = document.getElementById('canvas');
 const context = canvas.getContext('2d');
+const btnStart = document.getElementById('btnStart');
+const turnMessage = document.getElementById('landscape');
 
 const audios = [
     'dio-canaja-de-dio.mp3',
@@ -13,62 +15,61 @@ const audios = [
     'vafaculo.mp3'
 ];
 
-let mosconi = new Image();
-mosconi.src = 'asset/img/mosconi.png';
+const player = {
+    x: 0,
+    y: 0,
+    velocityY: 0,
+    gravity: 0.5,
+    jumpStrength: -8,
+};
 
-let life = new Image();
-life.src = 'asset/img/mosconi.png';
+const text = {
+    x : 0,
+    y : 0,
+    fontSize : 0
+}
 
-let porco = new Image();
-porco.src = 'asset/img/porco.png';
+let background, ground, mosconi, porco, troia, lifeImage;
 
-let troia = new Image();
-troia.src = 'asset/img/troia.png';
+const audioJump = new Audio('asset/audio/jump.wav');
+audioJump.volume = 0.2;
+const scoreAudio = new Audio('asset/audio/score.wav');
 
-let ground = new Image();
-ground.src = 'asset/img/flame.png';
 let groundX = 0;
 let groundSpeed = 2;
 
-let background = new Image();
-background.src = 'asset/img/bg.jpg';
 let backgroundX = 0;
 let backgroundSpeed = 0.5;
+
+let obstacleSpeed = 5;
 
 let idInterval;
 let idAnimation;
 let score = 0;
-let vite = 5;
+let lifes = 5;
 let isRunning = false;
 let isCollision = false;
 let gameover = false;
 const obstacles = [];
 
-const player = {
-    x: 50,
-    y: 50,
-    velocityY: 0,
-    gravity: 0.4,
-    jumpStrength: -7,
-    isJumping: false
-};
-
-const towerUp = new Image();
-towerUp.src = 'asset/img/pipe-up.png';
-const towerDown = new Image();
-towerDown.src = 'asset/img/pipe-down.png';
-
-porco.onload = () => {porco = drawRresizedImage(porco, 60);}
-life.onload = () => {life = drawRresizedImage(life, 20);}
-troia.onload = () => {troia = drawRresizedImage(troia, 70);}
 
 
-
-
+window.addEventListener('resize', () => {
+    resizeImages();
+});
 
 canvas.addEventListener('click', () => {
+    audioJump.play();
     player.velocityY = player.jumpStrength;
 })
+
+function scaleXFactor(sx){
+    return canvas.width * (sx / 850) | 0;
+}
+
+function scaleYFactor(sy){
+    return canvas.height * (sy / 478.125) | 0;
+}
 
 function drawRresizedImage(image, width){
     const finalWidth = width;
@@ -85,7 +86,9 @@ function drawRresizedImage(image, width){
 function spawnObstacle(){
     const random = Math.floor(Math.random() * 2);
     let image = random === 0 ? porco : troia;
-    const y = Math.floor(Math.random() * (canvas.height - ground.height - porco.height));
+    let minY = scaleYFactor(50);
+    let maxY = canvas.height - ground.height - image.height;
+    const y = Math.floor(Math.random() * (maxY - minY + 1)) + minY;
     obstacles.push({
         x : canvas.width, 
         y : y, 
@@ -113,64 +116,55 @@ function gameLoop(){
     if(backgroundX <= -canvas.width){
         backgroundX = 0;
     }
-    context.drawImage(background, backgroundX, canvas.height - background.height - 50, canvas.width, background.height);
-    context.drawImage(background, backgroundX + canvas.width, canvas.height - background.height - 50, canvas.width, background.height);
+
+    context.drawImage(background, backgroundX, 0, canvas.width, canvas.height);
+    context.drawImage(background, backgroundX + canvas.width, 0, canvas.width, canvas.height);
 
     context.drawImage(ground, groundX, canvas.height - ground.height, canvas.width, ground.height);
     context.drawImage(ground, groundX + canvas.width, canvas.height - ground.height, canvas.width, ground.height);
 
     
 
-    context.font = '30px Arial bold';
+    context.font = `${text.fontSize}px Arial bold`;
     context.fillStyle = '#fff';
     context.textAlign = 'start';
     context.textBaseline = 'top';
 
-    context.fillText(`Score ${score}`, 10, 10);
+    context.fillText(`Score ${score}`, text.x, text.y);
 
-    for(let i = 1; i <= vite; i++){
-        const x = canvas.width - ((20 + life.width) * i);
-        context.drawImage(life, x, 10, life.width, life.height);
-    }
+    
 
     // Gravità
     player.velocityY += player.gravity;
     player.y += player.velocityY;
 
     // Evita che il personaggio esca dallo schermo (pavimento)
-    if (player.y + player.height > canvas.height - ground.height + 60) {
+    if (player.y + player.height > canvas.height - ground.height + scaleYFactor(60)) {
         // player.y = canvas.height - ground.height - player.height;
         player.velocityY = -15;
     }
 
-    if(player.y <= 10) player.y = 10;
+    if(player.y <= scaleYFactor(50)) player.y = scaleYFactor(50);
 
     context.drawImage(mosconi, player.x, player.y, player.width, player.height);
 
     if(obstacles.length > 0){
         obstacles.forEach((obstacle, i) => {
-            obstacle.x -= 10;
+            obstacle.x -= obstacleSpeed;
 
             if(checkCollision(player, obstacle)){
                 obstacle.touched = true;
                 if(isCollision === false){
                     isCollision = true;
-                    vite--;
-                    console.log("Collisione");
+                    lifes--;
                     const fileSrc = audios[Math.floor(Math.random() * audios.length)];
                     const audio = new Audio(`asset/audio/${fileSrc}`);
                     audio.play();
                     setTimeout(() => {
                         isCollision = false;
                     }, 500);
-                    if(vite === 0){
+                    if(lifes === 0){
                         gameover = true;
-                        vite = 5;
-                        obstacles.length = 0;
-                        player.x = 50;
-                        player.y = 50;
-                        score = 0;
-                        stop();
                     }
                 }
             }
@@ -180,6 +174,10 @@ function gameLoop(){
             if(obstacle.x + obstacle.width < 0){
                 if(!obstacle.touched){
                     score++;
+                    scoreAudio.play()
+                    if(score %10 === 0){
+                        obstacleSpeed += 3;
+                    }
                 }
                 obstacles.splice(i, 1);
             }
@@ -187,42 +185,48 @@ function gameLoop(){
         })
     }
 
+    for(let i = 1; i <= lifes; i++){
+        const x = canvas.width - ((scaleXFactor(20) + lifeImage.width) * i);
+        context.drawImage(lifeImage, x, scaleYFactor(10), lifeImage.width, lifeImage.height);
+    }
+
+    if(gameover){
+        gameOver();
+    }
+
     idAnimation = requestAnimationFrame(gameLoop);
 }
 
-ground.onload = () => {
-    background.onload = () => {
-        mosconi.onload = () => {
-            ground = drawRresizedImage(ground, canvas.width);
-            background = drawRresizedImage(background, canvas.width);
-            mosconi = drawRresizedImage(mosconi, 40);
-            player.width = mosconi.width;
-            player.height = mosconi.height;
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(background, 0, canvas.height - background.height - 50, canvas.width, background.height);
-            context.drawImage(ground, 0, canvas.height - ground.height, canvas.width, ground.height);
-            context.drawImage(mosconi, player.x, player.y, player.width, player.height);
-        }
-    }
+function gameOver(){
+    lifes = 5;
+    obstacles.length = 0;
+    obstacleSpeed = 5;
+    player.x = scaleXFactor(40)
+    player.y = scaleYFactor(40);
+    score = 0;
+    stop();
+    gameover = false;
 }
 
 function start(){
     if(isRunning) return;
+    btnStart.style.display = 'none';
     isRunning = true;
     if(gameover){
         context.clearRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(background, 0, canvas.height - background.height - 50, canvas.width, background.height);
+        context.drawImage(background, 0, 0, canvas.width, canvas.height);
         context.drawImage(ground, 0, canvas.height - ground.height, canvas.width, ground.height);
         context.drawImage(mosconi, player.x, player.y, player.width, player.height);
     }
     gameLoop();
-    idInterval = setInterval(spawnObstacle, 2500);
+    idInterval = setInterval(spawnObstacle, 1500);
 }
 
 function stop(){
     isRunning = false;
     clearInterval(idInterval);
     cancelAnimationFrame(idAnimation);
+    btnStart.style.display = 'block';
 }
 
 function checkCollision(player, obstacle){
@@ -233,3 +237,91 @@ function checkCollision(player, obstacle){
         player.y + player.height > obstacle.y
     );
 }
+
+function loadImage(src){
+    return new Promise((next, error) => {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => next(img);
+        img.onerror = error;
+    });
+}
+
+async function initializeScene(){
+    const pathImages = [
+        'asset/img/bg.jpg',
+        'asset/img/flame.png',
+        'asset/img/mosconi.png',
+        'asset/img/porco.png',
+        'asset/img/troia.png'
+    ];
+
+    try{
+        [background, ground, mosconi, porco, troia] = await Promise.all(pathImages.map(loadImage));
+        resizeImages();        
+        
+    }
+    catch(error){
+        console.error("Errore nel caricamento delle immagini", error);
+    }
+}
+
+function resizeImages(){
+    resizeCanvas();
+    if(window.innerWidth < 600){
+        canvas.style.display = 'none';
+        btnStart.style.display = 'none';
+        turnMessage.style.display = 'block';
+    }
+    else{
+        turnMessage.style.display = 'none';
+        canvas.style.display = 'block';
+        btnStart.style.display = 'block';
+        btnStart.style.width = scaleXFactor(100) + 'px';
+        btnStart.style.height = scaleXFactor(100) + 'px';
+    }
+    const widthMosconi = scaleXFactor(35); 
+    const widthPorco = scaleXFactor(55);  
+    const widthTroia = scaleXFactor(75); 
+    const widthLife = scaleXFactor(15); 
+    background = drawRresizedImage(background, canvas.width);
+    ground = drawRresizedImage(ground, canvas.width);
+    lifeImage = drawRresizedImage(mosconi, widthLife);
+    mosconi = drawRresizedImage(mosconi, widthMosconi);
+    porco = drawRresizedImage(porco, widthPorco);
+    troia = drawRresizedImage(troia, widthTroia);
+    player.x = scaleXFactor(40);
+    player.y = scaleYFactor(40);
+    player.width = mosconi.width;
+    player.height = mosconi.height;
+    text.x = scaleXFactor(30);
+    text.y = scaleYFactor(10);
+    text.fontSize = scaleYFactor(30);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(background, 0, 0, canvas.width, canvas.height);
+    context.drawImage(ground, 0, canvas.height - ground.height, canvas.width, ground.height);
+    context.drawImage(mosconi, player.x, player.y, player.width, player.height);
+}
+
+function resizeCanvas(){
+    const windowWidth = window.innerWidth - 9;
+    const windowHeight = window.innerHeight - 9;
+    const ratio16_9 = 16 / 9;
+    let width, height;
+    if(windowWidth >= windowHeight){
+        width = windowWidth;
+        height = windowWidth / ratio16_9;
+        if(height > windowHeight){
+            height = windowHeight;
+            width = windowHeight * ratio16_9;
+        }
+    }
+    else{
+        width = windowWidth;
+        height = windowWidth / ratio16_9;
+    }
+    canvas.width = width | 0;
+    canvas.height = height | 0;
+}
+
+initializeScene();
